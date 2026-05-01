@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>gdriveget — Google Drive Downloader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style/style.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </div>
+    gdriveget
+  </div>
+  <span class="header-badge">Google Drive Downloader</span>
+</header>
+
+<main>
+  <h1 class="page-title">Download from Google Drive</h1>
+  <p class="page-sub">Enter links manually or upload a .txt file containing multiple links.</p>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('single')" id="tab-single">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      Input Link
+    </button>
+    <button class="tab-btn" onclick="switchTab('bulk')" id="tab-bulk">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Upload .txt
+    </button>
+    <button class="tab-btn" onclick="switchTab('history')" id="tab-history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      History
+    </button>
+  </div>
+
+  <!-- PANEL: SINGLE -->
+  <div class="panel active" id="panel-single">
+    <div class="card">
+      <div class="card-label">Google Drive Link</div>
+      <div class="input-row">
+        <input type="text" id="single-url" placeholder="https://drive.google.com/file/d/..." />
+        <button class="btn btn-ghost" onclick="pasteFromClipboard()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Paste
+        </button>
+        <button class="btn btn-primary" onclick="addSingleLink()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add
+        </button>
+      </div>
+      <p class="text-sm" style="margin-top:10px;">Supported formats: <code style="font-family:var(--mono);font-size:11.5px;color:var(--accent);">drive.google.com/file/d/ID</code> &nbsp;·&nbsp; <code style="font-family:var(--mono);font-size:11.5px;color:var(--accent);">drive.google.com/open?id=ID</code></p>
+    </div>
+
+    <div class="queue-header">
+      <span class="queue-count">Queue: <strong id="queue-count">0</strong> files</span>
+      <div class="flex-row">
+        <button class="btn btn-ghost btn-sm" onclick="clearQueue()" id="btn-clear" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+          Clear All
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="downloadAll()" id="btn-download-all" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download All
+        </button>
+      </div>
+    </div>
+
+    <div class="file-list" id="file-list">
+      <div class="empty-state" id="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+        <p>No files in queue</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL: BULK TXT -->
+  <div class="panel" id="panel-bulk">
+    <div class="card">
+      <div class="card-label">Upload .txt File</div>
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div class="drop-zone-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <p><span>Click to select</span> or drag file here</p>
+        <small style="display:block;margin-top:4px;font-family:var(--mono);font-size:11.5px;color:var(--text-dim);">Format: .txt — one link per line</small>
+      </div>
+      <input type="file" id="file-input" accept=".txt" onchange="handleFileUpload(event)">
+    </div>
+
+    <div class="card" style="display:none;" id="bulk-preview-card">
+      <div class="card-label">File Link Preview</div>
+      <textarea id="bulk-textarea" rows="7" placeholder="Links will appear here after upload..."></textarea>
+      <div style="display:flex;gap:10px;margin-top:12px;">
+        <button class="btn btn-ghost" onclick="clearBulk()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Clear
+        </button>
+        <button class="btn btn-primary ml-auto" onclick="addBulkLinks()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add to Queue
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL: HISTORY -->
+  <div class="panel" id="panel-history">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="card-label" style="margin-bottom:0;">Download History</div>
+        <button class="btn btn-danger btn-sm" onclick="clearHistory()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+          Clear History
+        </button>
+      </div>
+    </div>
+    <div class="history-list" id="history-list">
+      <div class="empty-state" id="history-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <p>No download history yet</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="toast-container"></div>
+
+  <script src="script/script.js"></script>
+</body>
+</html>
