@@ -197,32 +197,91 @@ function downloadItem(id) {
   if (!item) return;
   item.status = 'downloading';
   renderQueue();
+  
+  // Use a hidden anchor for direct download to avoid popup blockers
+  const url = buildDownloadUrl(item.fileId);
+  const a = document.createElement('a');
+  a.href = url;
+  // Note: we don't use _blank here to make it more likely to be treated as a direct download
+  // especially when triggered in a sequence.
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  
   setTimeout(() => {
     try {
-      const a = document.createElement('a');
-      a.href = buildDownloadUrl(item.fileId);
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      item.status = 'done';
-      addToHistory(item);
-      renderQueue();
-      toast('Download started: ' + item.name, 'success');
+      setTimeout(() => {
+        document.body.removeChild(a);
+        item.status = 'done';
+        addToHistory(item);
+        renderQueue();
+        toast('Download started: ' + item.name, 'success');
+      }, 500);
     } catch(e) {
       item.status = 'error';
       renderQueue();
       toast('Failed to start download.', 'error');
     }
-  }, 700);
+  }, 300);
 }
 
-function downloadAll() {
+async function fetchFile(item) {
+  const url = buildDownloadUrl(item.fileId);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Network response was not ok');
+    return await response.blob();
+  } catch (error) {
+    console.error('Fetch error:', error);
+    throw error;
+  }
+}
+
+async function downloadAll() {
   const pending = queue.filter(i => i.status === 'pending' || i.status === 'error');
   if (!pending.length) { toast('No files to download.', 'error'); return; }
-  pending.forEach((item, idx) => setTimeout(() => downloadItem(item.id), idx * 1200));
-  toast('Starting download for ' + pending.length + ' files...', 'success');
+
+  if (pending.length === 1) {
+    downloadItem(pending[0].id);
+    return;
+  }
+
+  // Batch download -> ZIP
+  toast('Preparing ' + pending.length + ' files for download...', 'success');
+  const zip = new JSZip();
+  let completed = 0;
+  let failed = 0;
+
+  for (const item of pending) {
+    item.status = 'downloading';
+    renderQueue();
+    try {
+      const blob = await fetchFile(item);
+      // We don't know the real filename from the uc link without a proxy,
+      // so we use the item.name or a fallback.
+      const filename = item.name.includes('.') ? item.name : item.name + '.bin';
+      zip.file(filename, blob);
+      item.status = 'done';
+      addToHistory(item);
+      completed++;
+    } catch (e) {
+      item.status = 'error';
+      failed++;
+    }
+    renderQueue();
+  }
+
+  if (completed > 0) {
+    toast('Generating ZIP folder...', 'success');
+    const content = await zip.generateAsync({ type: 'blob' });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    saveAs(content, `gdriveget_batch_${timestamp}.zip`);
+    toast('Batch download complete!', 'success');
+  }
+
+  if (failed > 0) {
+    toast(failed + ' files failed to download. Some GDrive links may block direct fetching.', 'error');
+  }
 }
 
 function clearQueue() { queue = []; renderQueue(); }
