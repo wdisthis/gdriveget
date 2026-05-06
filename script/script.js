@@ -139,6 +139,7 @@ function renderQueue() {
   
   document.getElementById('queue-count').textContent = queue.length;
   document.getElementById('btn-clear').style.display = queue.length ? '' : 'none';
+  document.getElementById('btn-download-seq').style.display = queue.length > 1 ? '' : 'none';
   document.getElementById('btn-download-all').style.display = queue.length ? '' : 'none';
 
   list.querySelectorAll('.file-item').forEach(el => el.remove());
@@ -198,12 +199,11 @@ function downloadItem(id) {
   item.status = 'downloading';
   renderQueue();
   
-  // Use a hidden anchor for direct download to avoid popup blockers
   const url = buildDownloadUrl(item.fileId);
   const a = document.createElement('a');
   a.href = url;
-  // Note: we don't use _blank here to make it more likely to be treated as a direct download
-  // especially when triggered in a sequence.
+  a.target = '_blank'; // Prevent navigating away from the app
+  a.rel = 'noopener noreferrer';
   a.style.display = 'none';
   document.body.appendChild(a);
   
@@ -229,10 +229,15 @@ async function fetchFile(item) {
   const url = buildDownloadUrl(item.fileId);
   try {
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Network response was not ok');
+    if (response.status === 403) {
+      throw new Error('403 Forbidden: Access denied. Make sure the file is public or you have permission.');
+    }
+    if (!response.ok) throw new Error('Network response was not ok (Status: ' + response.status + ')');
     return await response.blob();
   } catch (error) {
-    console.error('Fetch error:', error);
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error('CORS Error: Google Drive blocked direct fetching. Try "Download Individually" instead.');
+    }
     throw error;
   }
 }
@@ -247,18 +252,17 @@ async function downloadAll() {
   }
 
   // Batch download -> ZIP
-  toast('Preparing ' + pending.length + ' files for download...', 'success');
+  toast('Preparing ' + pending.length + ' files for ZIP...', 'success');
   const zip = new JSZip();
   let completed = 0;
   let failed = 0;
+  let lastError = '';
 
   for (const item of pending) {
     item.status = 'downloading';
     renderQueue();
     try {
       const blob = await fetchFile(item);
-      // We don't know the real filename from the uc link without a proxy,
-      // so we use the item.name or a fallback.
       const filename = item.name.includes('.') ? item.name : item.name + '.bin';
       zip.file(filename, blob);
       item.status = 'done';
@@ -267,6 +271,8 @@ async function downloadAll() {
     } catch (e) {
       item.status = 'error';
       failed++;
+      lastError = e.message;
+      console.error('Download failed for', item.name, e);
     }
     renderQueue();
   }
@@ -276,11 +282,31 @@ async function downloadAll() {
     const content = await zip.generateAsync({ type: 'blob' });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     saveAs(content, `gdriveget_batch_${timestamp}.zip`);
-    toast('Batch download complete!', 'success');
+    toast('Batch ZIP download complete!', 'success');
   }
 
   if (failed > 0) {
-    toast(failed + ' files failed to download. Some GDrive links may block direct fetching.', 'error');
+    if (completed === 0) {
+      toast('All downloads failed. ' + lastError, 'error');
+      // Auto-suggest sequential download if all failed
+      if (confirm('Direct ZIPing failed for all files (likely due to Google Drive restrictions). Would you like to download them individually instead?')) {
+        downloadSequentially(pending);
+      }
+    } else {
+      toast(failed + ' files failed. Some files may be restricted or too large for ZIPing.', 'error');
+    }
+  }
+}
+
+async function downloadSequentially(items) {
+  toast('Starting sequential download for ' + items.length + ' files...', 'success');
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    downloadItem(item.id);
+    // Wait between downloads to avoid browser blocking
+    if (i < items.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
   }
 }
 
