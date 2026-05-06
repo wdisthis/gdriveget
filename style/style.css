@@ -113,7 +113,37 @@ input[type="text"]:focus, textarea:focus { border-color: var(--accent); box-shad
 .file-item.error       { border-color: rgba(242,87,87,0.35); }
 .file-icon { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0; background: var(--surface2); border: 1px solid var(--border); }
 .file-info { flex: 1; min-width: 0; }
-.file-name { font-size: 13.5px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+.file-name-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.file-name {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.btn-icon-sm {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text-dim);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.btn-icon-sm:hover {
+  background: var(--surface2);
+  color: var(--accent);
+}
 .file-url { font-family: var(--mono); font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .file-actions { display: flex; gap: 6px; flex-shrink: 0; }
 

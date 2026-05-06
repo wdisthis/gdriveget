@@ -139,8 +139,7 @@ function renderQueue() {
   
   document.getElementById('queue-count').textContent = queue.length;
   document.getElementById('btn-clear').style.display = queue.length ? '' : 'none';
-  document.getElementById('btn-download-seq').style.display = queue.length > 1 ? '' : 'none';
-  document.getElementById('btn-download-all').style.display = queue.length ? '' : 'none';
+  document.getElementById('btn-download-all').style.display = queue.length > 0 ? '' : 'none';
 
   list.querySelectorAll('.file-item').forEach(el => el.remove());
 
@@ -173,7 +172,12 @@ function renderQueue() {
     el.innerHTML =
       '<div class="file-icon">' + fileIconHtml + '</div>'
       + '<div class="file-info">'
-      + '<div class="file-name">' + escHtml(item.name) + '</div>'
+      + '<div class="file-name-container">'
+      + '<span class="file-name" id="name-' + item.id + '">' + escHtml(item.name) + '</span>'
+      + '<button class="btn-icon-sm" onclick="renameItem(' + item.id + ')" title="Rename">'
+      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
+      + '</button>'
+      + '</div>'
       + '<div class="file-url">' + escHtml(shortUrl(item.url)) + '</div>'
       + progressHtml
       + '</div>'
@@ -225,85 +229,12 @@ function downloadItem(id) {
   }, 300);
 }
 
-async function fetchFile(item) {
-  const url = buildDownloadUrl(item.fileId);
-  try {
-    const response = await fetch(url);
-    if (response.status === 403) {
-      throw new Error('403 Forbidden: Access denied. Make sure the file is public or you have permission.');
-    }
-    if (!response.ok) throw new Error('Network response was not ok (Status: ' + response.status + ')');
-    return await response.blob();
-  } catch (error) {
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('CORS Error: Google Drive blocked direct fetching. Try "Download Individually" instead.');
-    }
-    throw error;
-  }
-}
-
-async function downloadAll() {
-  const pending = queue.filter(i => i.status === 'pending' || i.status === 'error');
-  if (!pending.length) { toast('No files to download.', 'error'); return; }
-
-  if (pending.length === 1) {
-    downloadItem(pending[0].id);
-    return;
-  }
-
-  // Batch download -> ZIP
-  toast('Preparing ' + pending.length + ' files for ZIP...', 'success');
-  const zip = new JSZip();
-  let completed = 0;
-  let failed = 0;
-  let lastError = '';
-
-  for (const item of pending) {
-    item.status = 'downloading';
-    renderQueue();
-    try {
-      const blob = await fetchFile(item);
-      const filename = item.name.includes('.') ? item.name : item.name + '.bin';
-      zip.file(filename, blob);
-      item.status = 'done';
-      addToHistory(item);
-      completed++;
-    } catch (e) {
-      item.status = 'error';
-      failed++;
-      lastError = e.message;
-      console.error('Download failed for', item.name, e);
-    }
-    renderQueue();
-  }
-
-  if (completed > 0) {
-    toast('Generating ZIP folder...', 'success');
-    const content = await zip.generateAsync({ type: 'blob' });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    saveAs(content, `gdriveget_batch_${timestamp}.zip`);
-    toast('Batch ZIP download complete!', 'success');
-  }
-
-  if (failed > 0) {
-    if (completed === 0) {
-      toast('All downloads failed. ' + lastError, 'error');
-      // Auto-suggest sequential download if all failed
-      if (confirm('Direct ZIPing failed for all files (likely due to Google Drive restrictions). Would you like to download them individually instead?')) {
-        downloadSequentially(pending);
-      }
-    } else {
-      toast(failed + ' files failed. Some files may be restricted or too large for ZIPing.', 'error');
-    }
-  }
-}
-
 async function downloadSequentially(items) {
+  if (!items.length) { toast('No files to download.', 'error'); return; }
   toast('Starting sequential download for ' + items.length + ' files...', 'success');
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     downloadItem(item.id);
-    // Wait between downloads to avoid browser blocking
     if (i < items.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 1500));
     }
@@ -313,6 +244,16 @@ async function downloadSequentially(items) {
 function clearQueue() { queue = []; renderQueue(); }
 
 function removeItem(id) { queue = queue.filter(i => i.id !== id); renderQueue(); }
+
+function renameItem(id) {
+  const item = queue.find(i => i.id === id);
+  if (!item) return;
+  const newName = prompt('Enter new filename:', item.name);
+  if (newName && newName.trim()) {
+    item.name = newName.trim();
+    renderQueue();
+  }
+}
 
 function copyLink(id) {
   const item = queue.find(i => i.id === id);
